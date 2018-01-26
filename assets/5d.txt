@@ -1,0 +1,319 @@
+// add classes
+// Enemy Focus:
+///////////////////////////////////////////////////CONSTANTS
+var BASE_WIDTH = 2048,
+  BASE_HEIGHT = 1536,
+  SCALE_X,
+  SCALE_Y,
+  FONT_SCALE = 250,
+  TIME_START;
+
+/////////////////////////////////////////////////OBJECTS
+
+var stage, bg;
+var content, logo;
+var preload,
+  images,
+  assetsLoaded = false;
+
+var STATE = {};
+STATE.current = "STATE_PLAY";
+var SCORE = 0;
+
+var STAR_SPEED = 4;
+var stars, g;
+
+var enemyPool;
+
+
+
+///CLASSES////////////////////////////////////////////
+//------------------------------------------------------
+//https://answers.unity.com/questions/637902/how-to-use-javascript-array-with-classes.html
+//https://www.sitepoint.com/object-oriented-javascript-deep-dive-es6-classes/
+//
+class Villian extends createjs.Bitmap {
+  constructor(image) {
+    super(image);
+    this.regX = this.image.width / 2;
+    this.regY = this.image.height / 2;
+    this.x = randRange(stage.canvas.width, stage.canvas.width);
+    this.y = randRange(
+      0 + this.image.height / 2,
+      stage.canvas.height - this.image.height / 2
+    );
+    this.moveTime = randRange(10, 30);
+    this.moveSize = randRange(10, 20);
+    this.speed = randRange(5, 20);
+    this.alive = false;
+    
+    Villian.Total++;
+  }
+  static get Total() {
+    return !this._count ? 0 : this._count;
+  }
+  static set Total(val) {
+    this._count = val;
+  }
+}
+
+const classes2 = { Villian }; // necessary to turn classname into variable: new classes2[className]
+
+function createPool(className, num, img) {
+  var size = num; // Max allowed in the pool
+  var pool = [];
+  /*
+	 * Populates the pool array
+	 */
+  this.init = function() {
+    for (var i = 0; i < size; i++) {
+      var obj = new classes2[className](img);
+      obj.alive = true;
+      pool[i] = obj;
+      content.addChild(obj);
+    }
+  };
+  this.updatePool = function(size) {
+    if (pool.length < size) {
+      var obj = new classes2[className](img);
+      obj.alive = true;
+      pool.push(obj);
+      content.addChild(obj);
+      //overlay.addChild(obj.circle);
+    }
+  };
+  this.run = function() {
+    updateArray(pool, true);
+  };
+  /*
+	 * Grabs the last item in the list and initializes it and
+	 * pushes it to the front of the array.
+	 */
+  this.get = function() {
+    let firstElement = pool[0];
+    if (!firstElement.alive) {
+      // if alive false
+      console.log(firstElement.alive);
+      console.log(firstElement.x);
+      //pool[size - 1].spawn(x, y, speed); // new obj into last
+      firstElement.x = 2048;
+      firstElement.alive = true;
+
+      //pool.unshift(pool.pop()); // put last to front
+      //pool.push(pool.shift());
+      //console.log(pool[0].alive);
+    }
+  };
+}
+//END CLASSES///////////////////////////////////////////////////////////////////////
+
+function init() {
+  console.clear();
+
+  canvas = document.getElementById("canvas");
+  document.getElementById("canvas").focus();
+  stage = new createjs.Stage(canvas);
+  stage.autoClear = false;
+  stage.snapToPixelEnabled = true;
+  stage.mouseMoveOutside = false;
+  createjs.Touch.enable(stage);
+
+  preloadAssets();
+ 
+  //createStarField();
+ createBackground();
+  createContent();
+  //createOverlay();
+ 
+  
+  resizeGame();
+  
+  window.addEventListener("resize", resizeGame, false);
+  window.addEventListener("orientationchange", resizeGame, false);
+
+  createjs.Ticker.timingMode = createjs.Ticker.RAF;
+  createjs.Ticker.framerate = 60;
+  createjs.Ticker.addEventListener(window);
+  createjs.Ticker.addEventListener("tick", handleTick);
+  TIME_START = createjs.Ticker.getTime();
+}
+// GAME LOOP ///////////////////////////////////////
+var next10sec = 10;
+function handleTick(event) {
+  //valueAtTime = start + (end - start) * (time / duration);
+  var runTime = (Math.floor(createjs.Ticker.getTime() - TIME_START) / 1000)+10;
+
+  if (assetsLoaded) {
+    if (runTime > next10sec && next10sec / 10 <= 10) {
+      //villianPool.updatePool(next10sec / 10); // to slowly add elements based on if() statement
+      //sharkPool.updatePool(next10sec / 10);
+      enemyPool.updatePool(next10sec / 10);
+      next10sec = next10sec + 10;
+    }
+    //villianPool.run();
+    //sharkPool.run();
+    enemyPool.run();
+  }
+  stage.update();
+}
+
+function updateArray(a, pool = false) {
+  //console.log(a.length);
+  let loopLimit = a.length - 1;
+  for (let i = loopLimit; i >= 0; --i) {
+    let current = a[i];
+    current.x -= current.speed;
+    current.y = Sinusodial(current);
+
+    if (!pool) {
+      if (current.x < 0 - current.image.width / 2) {
+        content.removeChild(current);
+        a.splice(i, 1);
+      }
+    } else {
+      if (current.x < 0 - current.image.width / 2) {
+        //current.alive = false;
+        current.x = 2048 + 300;
+      }
+    }
+  }
+}
+function Sinusodial(obj) {
+  //let moveSize = 5;
+  //let moveTime = 60;
+  //y+MoveSize*Math.sin(iterator+0.5*Math.PI/MoveTime)
+  //return obj.y + obj.moveSize * Math.sin(createjs.Ticker.getTicks() * 0.5 * Math.PI / obj.moveTime);
+  return (
+    obj.y +
+    obj.moveSize *
+      Math.sin(createjs.Ticker.getTicks() * 0.5 * Math.PI / obj.moveTime)
+  );
+}
+
+// PRELOAD ///////////////////////////////////////////////////
+function preloadAssets() {
+  images = images || {};
+  var manifest2 = [
+    { src: "https://i.imgur.com/JG8AngG.png", id: "spaceshark" },
+    { src: "https://i.imgur.com/OAjf5Qb.jpg", id: "boss" },
+    { src: "https://i.imgur.com/xpHS7fR.png", id: "enemy" },
+    { src: "https://i.imgur.com/Ckup2Ya.png", id: "diamond-logo" },
+    { src: "https://i.imgur.com/tEnXzNr.png", id: "explosion" }
+  ];
+  var manifest = [
+    {
+      src:
+        "https://res.cloudinary.com/azenhi/image/upload/v1514126248/spaceshark_xygdn7.png",
+      id: "spaceshark"
+    },
+    {
+      src:
+        "https://res.cloudinary.com/azenhi/image/upload/v1514126248/spaceshark_xygdn7.png",
+      id: "boss"
+    },
+    {
+      src:
+        "https://res.cloudinary.com/azenhi/image/upload/v1514120318/xpHS7fR_hwln6b.png",
+      id: "enemy"
+    },
+    {
+      src:
+        "https://res.cloudinary.com/azenhi/image/upload/v1514126248/spaceshark_xygdn7.png",
+      id: "diamondLogo"
+    },
+    {
+      src:
+        "https://res.cloudinary.com/azenhi/image/upload/v1514219478/explosion_ijy7qc.png",
+      id: "explosion"
+    },
+    {
+      src:
+        "https://res.cloudinary.com/azenhi/image/upload/v1514225664/0-80023b2ff826a5559ff797546a3255090accbc69763b2432edb16f9dfa6a3391_yxa3ol.jpg",
+      id: "explosion2"
+    }
+  ];
+
+  preload = new createjs.LoadQueue(false, null, true);
+  preload.on("fileload", handleFileLoad, this);
+  preload.on("complete", handleFilesComplete, this);
+  preload.loadManifest(manifest);
+}
+function handleFileLoad(o) {
+  if (o.item.type == "image") {
+    images[o.item.id] = o.result;
+  }
+}
+function handleFilesComplete(event) {
+  assetsLoaded = true;
+  //illianPool = new createPool("Villian", 10, images["explosion"]);
+  ////villianPool.init();
+  //sharkPool = new createPool("Villian", 10, images["spaceshark"]);
+  enemyPool = new createPool("Villian", 10, images["enemy"]);
+  ////sharkPool.init();
+}
+// CREATES /////////////////////////////
+function createOverlay() {
+  overlay = new createjs.Container();
+  stage.addChild(overlay);
+}
+function createContent() {
+  content = new createjs.Container();
+  stage.addChild(content);
+}
+function createBackground() {
+  bg = new createjs.Shape();
+  stage.addChild(bg);
+  stage.canvas.mask = bg;
+  //content.addChild(bg);
+  //content.mask = bg;
+}
+
+//ENVIRONMENT///////////////////////////////////////////////////////////////////////////////////////////////////
+function resizeGame() {
+  var widthToHeight = 4 / 3;
+  var newWidth = window.innerWidth;
+  var newHeight = window.innerHeight;
+  var newWidthToHeight = newWidth / newHeight;
+  stage.scaleX = newWidth / BASE_WIDTH;
+  stage.scaleY = newHeight / BASE_HEIGHT;
+  if (newWidthToHeight > widthToHeight) {
+    newWidth = newHeight * widthToHeight;
+    stage.scaleX = newWidth / BASE_WIDTH;
+    stage.scaleY = newHeight / BASE_HEIGHT;
+  } else {
+    newHeight = newWidth / widthToHeight;
+    stage.scaleX = newWidth / BASE_WIDTH;
+    stage.scaleY = newHeight / BASE_HEIGHT;
+  }
+  SCALE_X = Math.round(stage.scaleX * 1000) / 1000;
+  SCALE_Y = Math.round(stage.scaleY * 1000) / 1000;
+  stage.regX = BASE_WIDTH / 2;
+  stage.x = window.innerWidth / 2;
+  // Background: full screen redraw
+  bg.graphics.clear();
+  bg.graphics
+   .beginFill("#000")
+   .drawRect(0, 0, stage.canvas.width, stage.canvas.height);
+  content.mask = bg;
+}
+
+
+// UTILITIES ////////////////////////////
+function randRange(min, max) {
+  return Math.floor(Math.random() * (max - min)) + min;
+}
+function realTime() {
+  // createjs.Ticker.getTime() - TIME_START)/1000);
+}
+function millisToMinutesAndSeconds(millis) {
+  millis = createjs.Ticker.getTime() - TIME_START;
+  var minutes = Math.floor(millis / 60000);
+  var seconds = ((millis % 60000) / 1000).toFixed(0);
+  return minutes + ":" + (seconds < 10 ? "0" : "") + seconds;
+}
+///////////////////////////////////////////////////////////
+window.onload = function() {
+  ////document.iframe.focus();
+  document.getElementById("canvas").focus();
+  init();
+};

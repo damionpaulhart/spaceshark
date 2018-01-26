@@ -1,0 +1,868 @@
+// add classes
+// Add Sound
+// Add Pool
+///////////////////////////////////////////////////CONSTANTS
+
+var BASE_WIDTH = 2048,
+  BASE_HEIGHT = 1536,
+  SCALE_X,
+  SCALE_Y,
+  FONT_SCALE = 250,
+  TIME_START;
+
+/////////////////////////////////////////////////OBJECTS
+
+var stage, bg;
+var content, logo, mute = true;
+var preload,
+  images,
+  assetsLoaded = false;
+
+var STATE = {};
+STATE.current = "STATE_MENU";
+var SCORE = 0;
+
+var STAR_SPEED = 4;
+var stars, g;
+
+var enemyPool;
+
+var HERO_LIFE = 100;
+var HERO_SPEED = 20;
+var moveLeft = false;
+var moveRight = false;
+var moveUp = false;
+var moveDown = false;
+var hero;
+var firing = false;
+var BULLET_LIMIT = 10;
+var BULLET_SPEED = 24;
+var BULLET_RATE = 1; //everysecond
+var bullets;
+var bulletG;
+var explosions;
+/*
+function gameState(state){
+switch(state) {
+    case STATE_MENU:
+        code block
+        break;
+    case STATE_PLAY:
+        code block
+        break;
+    case STATE_END:
+        code block
+        break;
+    default:
+        init();
+}}
+1. The Boot State - We are simply going to start the physics system, and then call the Load State
+2. The Load State - We display a ‘loading’ text, load our assets, and call the Menu State
+3. The Menu State - We display the game name, get player input and call the Play State
+4. The Play State - This is where the game logic is actually handled. When the player wins (there is no way to lose), we call the Win State
+5. The Win State - This state will display a simple ‘You Won’ message, get player input, and re-call the Menu State
+*/
+///CLASSES////////////////////////////////////////////
+//------------------------------------------------------
+//https://answers.unity.com/questions/637902/how-to-use-javascript-array-with-classes.html
+//https://www.sitepoint.com/object-oriented-javascript-deep-dive-es6-classes/
+//
+class Villian extends createjs.Bitmap {
+  constructor(image) {
+    super(image);
+    this.regX = this.image.width / 2;
+    this.regY = this.image.height / 2;
+    this.x = randRange(stage.canvas.width, stage.canvas.width);
+    this.y = randRange(
+      0 + this.image.height / 2,
+      stage.canvas.height - this.image.height / 2
+    );
+    this.moveTime = randRange(10, 30);
+    this.moveSize = randRange(10, 20);
+    this.speed = randRange(5, 20);
+    this.alive = false;
+    
+    Villian.Total++;
+  }
+  static get Total() {
+    return !this._count ? 0 : this._count;
+  }
+  static set Total(val) {
+    this._count = val;
+  }
+}
+
+
+const classes2 = { Villian }; // necessary to turn classname into variable: new classes2[className]
+
+function createPool(className, num, img) {
+  var size = num; // Max allowed in the pool
+  var pool = [];
+
+  /*
+	 * Populates the pool array
+	 */
+  this.init = function() {
+    for (var i = 0; i < size; i++) {
+      var obj = new classes2[className](img);
+      obj.alive = true;
+      pool[i] = obj;
+      content.addChild(obj);
+    }
+  };
+  this.updatePool = function(size) {
+    if (pool.length < size) {
+      var obj = new classes2[className](img);
+      obj.alive = true;
+      pool.push(obj);
+      content.addChild(obj);
+      //overlay.addChild(obj.circle);
+    }
+  };
+  this.run = function() {
+    updateArray(pool, true);
+  };
+  /*
+	 * Grabs the last item in the list and initializes it and
+	 * pushes it to the front of the array.
+	 */
+  this.get = function() {
+    let firstElement = pool[0];
+    if (!firstElement.alive) {
+      // if alive false
+      console.log(firstElement.alive);
+      console.log(firstElement.x);
+      //pool[size - 1].spawn(x, y, speed); // new obj into last
+      firstElement.x = 2048;
+      firstElement.alive = true;
+
+      //pool.unshift(pool.pop()); // put last to front
+      //pool.push(pool.shift());
+      //console.log(pool[0].alive);
+    }
+  };
+}
+//END CLASSES/////////////////////////////////////////////////
+// CREATES //////////////////////////////////////////////////
+function createOverlay() {
+  overlay = new createjs.Container();
+  stage.addChild(overlay);
+}
+function createContent() {
+  content = new createjs.Container();
+  stage.addChild(content);
+  content.visible = false;
+  content.tickEnabled = false;
+}
+function createBackground() {
+  bg = new createjs.Shape();
+  stage.addChild(bg);
+  stage.canvas.mask = bg;
+}
+function createStarField() {
+  stars = new Array();
+
+  g = new createjs.Graphics();
+  g.setStrokeStyle(1);
+  g.beginStroke(createjs.Graphics.getRGB(155, 155, 155));
+  g.beginFill(createjs.Graphics.getRGB(155, 155, 155));
+  g.drawCircle(0, 0, 1);
+
+  for (var i = 0; i < 100; ++i) {
+    var s = new createjs.Shape(g);
+    stars.push(s);
+    s.x = randRange(10, stage.canvas.width);
+    s.y = randRange(10, stage.canvas.height);
+    s.scaleX = randRange(0.5, 5);
+    s.scaleY = s.scaleX;
+    s.alpha = Math.random() + 0.5;
+
+    stage.addChild(s);
+  }
+}
+
+function createExplosion(xpos, ypos) {
+  var exp = new createjs.Bitmap(images["explosion"]);
+  exp.regX = exp.image.width / 2;
+  exp.regY = exp.image.height / 2;
+  exp.scaleX = exp.scaleY = 3;
+  exp.x = xpos;
+  exp.y = ypos;
+  explosions.push(exp);
+  content.addChild(exp);
+}
+function createExplosion2(xpos, ypos) {
+  var exp = new createjs.Bitmap(images["explosion2"]);
+  exp.regX = exp.image.width / 2;
+  exp.regY = exp.image.height / 2;
+  exp.scaleX = exp.scaleY = 1;
+  exp.x = xpos;
+  exp.y = ypos;
+  explosions.push(exp);
+  content.addChild(exp);
+}
+// END CREATES //////////////////////////////////////////////////
+// PRELOAD ///////////////////////////////////////////////////
+function preloadAssets() {
+  images = images || {};
+  var manifest2 = [
+    { src: "https://i.imgur.com/JG8AngG.png", id: "spaceshark" },
+    { src: "https://i.imgur.com/OAjf5Qb.jpg", id: "boss" },
+    { src: "https://i.imgur.com/xpHS7fR.png", id: "enemy" },
+    { src: "https://i.imgur.com/Ckup2Ya.png", id: "diamond-logo" },
+    { src: "https://i.imgur.com/tEnXzNr.png", id: "explosion" }
+  ];
+  var manifest = [
+    {
+      src:
+        "https://res.cloudinary.com/azenhi/image/upload/v1514126248/spaceshark_xygdn7.png",
+      id: "spaceshark"
+    },
+    {
+      src:
+        "https://res.cloudinary.com/azenhi/image/upload/v1514126248/spaceshark_xygdn7.png",
+      id: "boss"
+    },
+    {
+      src:
+        "https://res.cloudinary.com/azenhi/image/upload/v1514120318/xpHS7fR_hwln6b.png",
+      id: "enemy"
+    },
+    {
+      src:
+        "https://res.cloudinary.com/azenhi/image/upload/v1514126248/spaceshark_xygdn7.png",
+      id: "diamondLogo"
+    },
+    {
+      src:
+        "https://res.cloudinary.com/azenhi/image/upload/v1514219478/explosion_ijy7qc.png",
+      id: "explosion"
+    },
+    {
+      src:
+        "https://res.cloudinary.com/azenhi/image/upload/v1514225664/0-80023b2ff826a5559ff797546a3255090accbc69763b2432edb16f9dfa6a3391_yxa3ol.jpg",
+      id: "explosion2"
+    }, 
+    {id: "mySound", src: "https://dhart.co/dph-projects-software/hippyvsman/assets/117137__zimbot__explosionbombblastambient2.mp3", data:1}, 
+    {id: "spacesharktheme", src: "https://dhart.co/dph-projects-software/hippyvsman/assets/spaceshark_theme-01_loop.mp3", data:1},
+    {id: "lazer", src: "https://dhart.co/dph-projects-software/hippyvsman/assets/376694__daleonfire__lazer.mp3"},
+    {id: "sharkexplosion", src: "https://dhart.co/dph-projects-software/hippyvsman/assets/399656__bajko__sfx-thunder-blast.mp3", data:1},
+    {id: "mute", src: "https://dhart.co/dph-projects-software/hippyvsman/assets/mute.png"}
+  ];
+
+  preload = new createjs.LoadQueue(false, null, true);
+  createjs.Sound.alternateExtensions = ["mp3"];
+  preload.installPlugin(createjs.Sound);
+  preload.on("fileload", handleFileLoad, this);
+  preload.on("complete", handleFilesComplete, this);
+  preload.loadManifest(manifest);
+}
+function handleFileLoad(o) {
+  if (o.item.type == "image") {
+    images[o.item.id] = o.result;
+  }
+}
+function handleFilesComplete(event) {
+  hero = new createjs.Bitmap(images["spaceshark"]);
+  hero.regX = hero.image.width / 2;
+  hero.regY = hero.image.height / 2;
+  hero.scaleX = 1.5;
+  hero.scaleY = 1.5;
+  hero.x = hero.image.width / 2;
+  hero.y = stage.canvas.height / 2;
+  hero.scaleX = -1;
+  //hero.addEventListener("mousedown", handleMouseDown);
+  hero.on("mousedown", function(evt) {
+    //console.log(evt.stageX)
+    //console.log(stage.scaleY * evt.stageY *2);
+    // this.offset = {x: this.x - evt.stageX, y: this.y - evt.stageY};
+    //this.x = evt.stageX - this.offset.x;
+    //this.y = evt.stageY - this.offset.y;
+  });
+  hero.on("pressmove", function(evt) {
+    //this.offset = {x: this.x - evt.stageX, y: this.y - evt.stageY};
+    //console.log("offset: " + this.offset.x);
+    //console.log("Mouse: " + evt.stageX + "," + evt.stageY);
+    //console.log("Shark " + this.x + "," + this.y);
+    //console.log("scaleX "+ stage.scaleX);
+    // 0=window.innerWidth/2
+    var fullWidth = Math.floor(BASE_WIDTH * evt.stageX / window.innerWidth); // mouse across whole window width
+    var curWidth = BASE_WIDTH * SCALE_X;
+    var mouseOffset = stage.x - curWidth / 2;
+    //console.log(mouseOffset);
+    //var newX = curWidth*evt.stageX/fullWidth;
+    //stage.regX // BASE_WIDTH / 2;
+    //stage.x // window.innerWidth / 2;
+    var newX = (evt.stageX - mouseOffset) / SCALE_X;
+    //console.log("scaleX: "+ stage.mouseX + " stageX: " + evt.stageX);
+    //this.x = Math.floor(evt.stageX/window.innerWidth); // 0
+
+    //(mouse_x_pos + view_offset_x) / tile_width;
+    this.x = Math.floor(newX); // 0
+    this.y = Math.floor(evt.stageY * BASE_HEIGHT / window.innerHeight);
+    //stageY/clientHeight=x/BS
+    //clientHeightX=stageY*BASE_HEIGHT/clientHeight
+    //console.log(evt);
+    //this.x = evt.stageX;
+    //this.y= evt.stageY;
+    //BOUNDS
+    //if(false){
+    if (this.x < this.image.width / 2) this.x = this.image.width / 2;
+    if (this.x > canvas.width - this.image.width / 2)
+      this.x = canvas.width - this.image.width / 2;
+    if (this.y < this.image.height / 2) this.y = this.image.height / 2;
+    if (this.y > canvas.width - this.image.height / 2)
+      this.y = canvas.width - this.image.height / 2;
+    //}
+    // indicate that the stage should be updated on the next tick:
+    update = true;
+  });
+
+  //content.addChild(hero);
+  //console.log("added hero to CONTENT")
+  
+  logo = new createjs.Bitmap(images["mute"]);
+  logo.regX = logo.image.width;
+  logo.regY = logo.image.height;
+  logo.x = stage.canvas.width;
+  //logo.y = stage.canvas.height - logo.image.height / 2;
+  logo.y = logo.image.height;
+  //logo.alpha = 0.1;
+  //logo.rotation = -45;
+  logo.on("mousedown", function(evt) {
+    createjs.Sound.muted = mute = !mute;
+  });
+  stage.addChild(logo);
+
+  assetsLoaded = true;
+  enemyPool = new createPool("Villian", 10, images["enemy"]);
+ 
+}
+// END PRELOAD //////////////////////////////////////////////////
+// INIT  //////////////////////////////////////////////////
+function init() {
+  console.clear();
+
+  canvas = document.getElementById("canvas");
+  document.getElementById("canvas").focus();
+  stage = new createjs.Stage(canvas);
+  stage.autoClear = false;
+  createjs.Touch.enable(stage);
+  //stage.regX = BASE_WIDTH / 2;
+  //stage.x = window.innerWidth / 2;
+  stage.snapToPixelEnabled = true;
+  stage.mouseMoveOutside = false;
+  
+  bullets = new Array();
+  bulletG = new createjs.Graphics();
+  //bulletG.setStrokeStyle(1);
+  //bulletG.beginStroke(createjs.Graphics.getRGB(180, 0, 0));
+  //bulletG.beginFill(createjs.Graphics.getRGB(200, 200, 0));
+  bulletG.beginFill(createjs.Graphics.getRGB(255, 165, 0));
+  bulletG.drawCircle(0, 0, 16);
+
+  explosions = new Array();
+
+  preloadAssets();
+  createBackground();
+  createStarField();
+  createContent();
+  //createOverlay();
+ 
+  resizeGame();
+
+  document.onkeydown = onKeyDown;
+  document.onkeyup = onKeyUp;
+
+  window.addEventListener("resize", resizeGame, false);
+  window.addEventListener("orientationchange", resizeGame, false);
+
+  createjs.Sound.muted = true;
+  createjs.Ticker.timingMode = createjs.Ticker.RAF;
+  createjs.Ticker.framerate = 60;
+  createjs.Ticker.addEventListener(window);
+  createjs.Ticker.addEventListener("tick", handleTick);
+  TIME_START = createjs.Ticker.getTime();
+}
+// END INIT //////////////////////////////////////////////////
+// GAME LOOP ///////////////////////////////////////
+// GAME LOOP ///////////////////////////////////////
+var next10sec = 10;
+function handleTick(event) {
+  switch (STATE.current) {
+    case "STATE_MENU":
+      
+      //if (doOnce){
+        //playMenuSound();
+      var props = new createjs.PlayPropsConfig().set({ volume: 0.01})
+        createjs.Sound.play("spacesharktheme", props);
+       // doOnce=false;
+     // }
+      updateStarField();
+      var logo = document.getElementById("logo");
+      
+      logo.style.left = (window.innerWidth/2)-(BASE_WIDTH * SCALE_X)/2 + "px";
+      logo.style.top = window.innerHeight/2/2 + "px";
+      logo.style.width = (BASE_WIDTH * SCALE_X) + "px";
+      //logo.style.height = window.innerHeight/2 + "px";
+      logo.style.fontSize = (BASE_WIDTH * SCALE_X) / 150 + "em";
+      //logo.style.fontSize = 2 + "em";
+      if (assetsLoaded) {
+        hero.x = BASE_WIDTH/2;
+        hero.y = BASE_HEIGHT/1.5;
+        //console.log(hero.y);
+        stage.addChild(hero);
+      }
+      
+      break;
+    case "STATE_PLAY":
+
+    //valueAtTime = start + (end - start) * (time / duration);
+  var runTime = (Math.floor(createjs.Ticker.getTime() - TIME_START) / 1000)+10;
+    
+    
+      updateStarField();
+      if (assetsLoaded) {
+        collide();
+        // move 100 pixels per second (elapsedTimeInMS / 1000msPerSecond * pixelsPerSecond):
+        //circle.x += event.delta/1000*100;
+
+        var fireTime = Math.floor(event.time - BULLET_RATE);
+        //console.log("fireTime: "+fireTime);
+        if (firing && fireTime > 200) {
+          //var fireTime = fireTime + event.delta;
+          //console.log(fireTime);
+          //if (fireTime > 100){
+          //console.log("should not be here");
+          doFire();
+          //fireTime = 0;
+          // }
+        }
+        var statsPanel = document.getElementById("statsPanel");
+        statsPanel.innerHTML = "SCORE" + SCORE;
+        var guiTextScore = document.getElementById("bottomLeft");
+        guiTextScore.innerHTML = "SCORE<br><span style='font-size:130%'>" + SCORE + "</span>";
+        var bottomCenter = document.getElementById("bottomCenter");
+        bottomCenter.innerHTML =
+          "TIME<br><span style='font-size:130%'>" + Math.floor(event.time / 1000) + "</span>";
+        var bottomRight = document.getElementById("bottomRight");
+        bottomRight.innerHTML = "%<br><span style='font-size:130%'>" + HERO_LIFE + "</span>";
+        updateBullets();
+        
+  if (runTime > next10sec && next10sec / 10 <= 10) {
+      enemyPool.updatePool(next10sec / 10);
+      next10sec = next10sec + 10;
+    }
+    checkMovement();
+    enemyPool.run();
+        //updateEnemies();
+        updateExplosions();
+      }
+      break;
+    case STATE_END:
+      alert("end");
+      break;
+    default:
+      init();
+  }
+  stage.update();
+}
+
+// END GAME LOOP //////////////////////////////////////////////////
+// UPDATE FUNCTIONS //////////////////////////////////////////////////
+function updateArray(a, pool = false) {
+  //console.log(a.length);
+  let loopLimit = a.length - 1;
+  for (let i = loopLimit; i >= 0; --i) {
+    let current = a[i];
+    current.x -= current.speed;
+    current.y = Sinusodial(current);
+
+    if (!pool) {
+      if (current.x < 0 - current.image.width / 2) {
+        content.removeChild(current);
+        a.splice(i, 1);
+      }
+    } else {
+      if (current.x < 0 - current.image.width / 2) {
+        //current.alive = false;
+        current.x = 2048 + 300;
+      }
+    }
+  }
+}
+function Sinusodial(obj) {
+  //let moveSize = 5;
+  //let moveTime = 60;
+  //y+MoveSize*Math.sin(iterator+0.5*Math.PI/MoveTime)
+  //return obj.y + obj.moveSize * Math.sin(createjs.Ticker.getTicks() * 0.5 * Math.PI / obj.moveTime);
+  return (
+    obj.y +
+    obj.moveSize *
+      Math.sin(createjs.Ticker.getTicks() * 0.5 * Math.PI / obj.moveTime)
+  );
+}
+function updateStarField() {
+  var curStar;
+  var limit = stars.length;
+  for (var i = 0; i < limit; ++i) {
+    curStar = stars[i];
+    curStar.x -= STAR_SPEED;
+    if (curStar.x < 0) {
+      curStar.x = randRange(10, stage.canvas.width);
+      curStar.y = randRange(10, stage.canvas.height);
+    }
+  }
+}
+function updateBullets() {
+  var bLimit = bullets.length - 1;
+  for (var i = bLimit; i >= 0; --i) {
+    bullets[i].x += BULLET_SPEED;
+    if (bullets[i].x > stage.canvas.width) {
+      content.removeChild(bullets[i]);
+      bullets.splice(i, 1);
+    }
+  }
+}
+function updateEnemies() {
+  var loopLimit = enemies.length - 1;
+  for (var i = loopLimit; i >= 0; --i) {
+    //https://gamedevelopment.tutsplus.com/tutorials/quick-tip-create-smooth-enemy-movement-with-sinusoidal-motion--gamedev-6009?_ga=2.198445103.168129357.1514229603-1565636906.1514229603
+    //enemies[i].x -= ENEMY_SPEED;
+    enemies[i].x -= enemies[i].speed;
+    //enemies[i].y = enemies[i].y+10* Math.sin(createjs.Ticker.getTicks() * 0.5 * Math.PI/30);
+    //enemies[i].y = enemies[i].y+(Math.random()*20)* Math.sin(createjs.Ticker.getTicks() * 0.5 * Math.PI/30);
+    enemies[i].y =
+      enemies[i].y +
+      enemies[i].randMoveSize *
+        Math.sin(
+          createjs.Ticker.getTicks() * 0.5 * Math.PI / enemies[i].randMoveTime
+        );
+    //enemies[i].y = enemies[i].y+10* Math.sin(Math.random()*createjs.Ticker.getTicks() * 0.5 * Math.PI/30);
+
+    if (enemies[i].x < 0 - enemies[i].image.width / 2) {
+      content.removeChild(enemies[i]);
+      enemies.splice(i, 1);
+    }
+  }
+}
+function updateExplosions() {
+  var loopLimit = explosions.length - 1;
+  for (var i = loopLimit; i >= 0; --i) {
+    explosions[i].x -= ENEMY_SPEED / 2;
+    explosions[i].alpha -= 0.04;
+    if (explosions[i].alpha <= 0) {
+      content.removeChild(explosions[i]);
+      explosions.splice(i, 1);
+    }
+  }
+}
+// END UPDATE FUNCTIONS //////////////////////////////////////////////////
+// INTERACTION FUNCTIONS /////////////////////////////////////////////////
+function checkMovement() {
+  //console.log("keymove:" + hero.x + "," + hero.y);
+  if (moveLeft) {
+    hero.x -= HERO_SPEED;
+    //if (bmpMonaLisa.x < bmpMonaLisa.image.width/2)
+    //  bmpMonaLisa.x = bmpMonaLisa.image.width/2;
+    if (hero.x < hero.image.width / 2) hero.x = hero.image.width / 2;
+  } else if (moveRight) {
+    hero.x += HERO_SPEED;
+    if (hero.x > canvas.width - hero.image.width / 2)
+      hero.x = canvas.width - hero.image.width / 2;
+  }
+
+  if (moveUp) {
+    hero.y -= HERO_SPEED;
+    if (hero.y < hero.image.height / 2) hero.y = hero.image.height / 2;
+  } else if (moveDown) {
+    hero.y += HERO_SPEED;
+    if (hero.y > canvas.height - hero.image.height / 2)
+      hero.y = canvas.height - hero.image.height / 2;
+  }
+}
+function doFire() {
+  if (bullets.length <= 10) {
+    var bullet = new createjs.Shape(bulletG);
+    bullet.scaleX = 1.5;
+    bullet.x = hero.x + (hero.image.width / 2 - 125);
+    bullet.y = hero.y - 50;
+    bullets.push(bullet);
+    content.addChild(bullet);
+    createjs.Sound.play("lazer");
+    BULLET_RATE = createjs.Ticker.getTime();
+  }
+}
+
+function collide() {
+  var numEnemies = enemies.length - 1;
+  var numBullets = bullets.length - 1;
+  var curEnemy, curBullet;
+
+  for (var i = numEnemies; i >= 0; --i) {
+    curEnemy = enemies[i];
+    // check player/enemy collision
+    if (distance(curEnemy, hero) < 100) {
+      createExplosion2(curEnemy.x, curEnemy.y);
+      createjs.Sound.play("sharkexplosion", createjs.Sound.INTERRUPT_ANY);
+      content.removeChild(enemies[i]); // using [] seems to stop enemies from 'sticking'
+      enemies.splice(i, 1);
+      HERO_LIFE -= 10;
+      if(HERO_LIFE<=0){cleanGame();}
+      SCORE += 1;
+    }
+
+    // check bullet/enemy collision
+    for (var j = numBullets; j >= 0; --j) {
+      curBullet = bullets[j];
+
+      if (distance(curEnemy, curBullet) < 100) {
+        //content.removeChild(curRock) ;
+        createjs.Sound.play("mySound", createjs.Sound.INTERRUPT_ANY);
+        content.removeChild(enemies[i]); // using [] seems to stop enemies from 'sticking'
+        content.removeChild(curBullet);
+        createExplosion(curEnemy.x, curEnemy.y);
+        SCORE += 1;
+        enemies.splice(i, 1);
+        bullets.splice(j, 1);
+      }
+    }
+    numBullets = bullets.length - 1;
+  }
+// END INTERACTION FUNCTIONS /////////////////////////////////////////////////
+//GAMESTATE CONTROLLERS//////////////////////////////////////////////////////
+function cleanMenu(){
+  var logo = document.getElementById("logo");
+  logo.style.display = "none";
+  var guiPanel2 = document.getElementById("guiPanel2");
+  guiPanel2.style.display = "grid";
+  
+  stage.removeChild(hero);
+  content.addChild(hero);
+  content.visible = true;
+  hero.x = hero.image.width / 2;
+  hero.y = stage.canvas.height / 2;
+  createjs.Sound.stop("spacesharktheme");
+}
+function cleanGame(){
+  //alert("clean");
+  content.visible = false;
+  content.tickEnabled = false;
+  HERO_LIFE = 100;
+  SCORE = 0;
+  var guiPanel2 = document.getElementById("guiPanel2");
+      guiPanel2.style.display = "none";
+  var logo = document.getElementById("logo");
+      logo.style.display = "inline";
+  
+  STATE.current = "STATE_MENU";
+}
+//END GAMESTATE CONTROLLERS//////////////////////////////////////////////////////
+// INPUT CONTROLLERS///////////////////////////////////////////////////
+function onKeyDown(e) {
+  //console.log("keydown");
+  var e = e || window.event; // if no e, make one
+
+  switch (e.keyCode) {
+    // left
+    case 37:
+      moveLeft = true;
+      moveRight = false;
+      e.preventDefault();
+      e.stopPropagation();
+      break;
+    // up
+    case 38:
+      moveUp = true;
+      moveDown = false;
+      e.preventDefault();
+      e.stopPropagation();
+      break;
+    // right
+    case 39:
+      moveRight = true;
+      moveLeft = false;
+      e.preventDefault();
+      e.stopPropagation();
+      break;
+    // down
+    case 40:
+      moveDown = true;
+      moveUp = false;
+      e.preventDefault();
+      e.stopPropagation();
+      break;
+    case 32:
+      firing = true;
+      e.preventDefault();
+      e.stopPropagation();
+      break;
+  }
+}
+function onKeyUp(e) {
+  var e = e || window.event; // if no e, make one
+  switch (e.keyCode) {
+    case 37:
+      moveLeft = false;
+      e.preventDefault();
+      e.stopPropagation();
+      break;
+    case 38:
+      moveUp = false;
+      e.preventDefault();
+      e.stopPropagation();
+      break;
+    case 39:
+      moveRight = false;
+      e.preventDefault();
+      e.stopPropagation();
+      break;
+    case 40:
+      moveDown = false;
+      e.preventDefault();
+      e.stopPropagation();
+      break;
+    // Space bar for firing
+    case 32:
+      firing = false;
+      //doFire();
+      e.preventDefault();
+      e.stopPropagation();
+      break;
+  }
+}
+function handleMouseDown(evt) {
+  //console.log(evt);
+  //evt.target.x = evt.stageX;
+  //evt.target.y = evt.stageY;
+  //this.parent.addChild(this);
+  //evt.target.offset = {x: evt.target.x - evt.stageX, y: evt.target.y - evt.stageY};
+  //this.offset = {x: this.x - evt.stageX, y: this.y - evt.stageY};
+}
+//// END INPUT CONTROLLERS//////////////////////////////////////
+//ENVIRONMENT///////////////////////////////////////////////////////////////////////////////////////////////////
+function resizeGame() {
+  // Resize the canvas element
+  var widthToHeight = 4 / 3;
+  var newWidth = window.innerWidth;
+  var newHeight = window.innerHeight;
+  var newWidthToHeight = newWidth / newHeight;
+  stage.scaleX = newWidth / BASE_WIDTH;
+  stage.scaleY = newHeight / BASE_HEIGHT;
+  if (newWidthToHeight > widthToHeight) {
+    // wider than 4/3
+    newWidth = newHeight * widthToHeight;
+    stage.scaleX = newWidth / BASE_WIDTH;
+    stage.scaleY = newHeight / BASE_HEIGHT;
+  } else {
+    // taller than 4/3
+    newHeight = newWidth / widthToHeight;
+    stage.scaleX = newWidth / BASE_WIDTH;
+    stage.scaleY = newHeight / BASE_HEIGHT;
+  }
+  SCALE_X = Math.round(stage.scaleX * 1000) / 1000;
+  SCALE_Y = Math.round(stage.scaleY * 1000) / 1000;
+  stage.regX = BASE_WIDTH / 2;
+  stage.x = window.innerWidth / 2;
+  
+  // SIZE GUI elemetns
+  var statsPanel = document.getElementById("statsPanel");
+  statsPanel.style.width = BASE_WIDTH * SCALE_X + "px";
+  statsPanel.style.left =
+    window.innerWidth / 2 - BASE_WIDTH * SCALE_X / 2 + "px";
+  statsPanel.style.fontSize = newWidth / 250 + "em";
+
+  var guiPanel2 = document.getElementById("guiPanel2");
+  guiPanel2.style.width = BASE_WIDTH * SCALE_X + "px";
+  guiPanel2.style.left =
+    window.innerWidth / 2 - BASE_WIDTH * SCALE_X / 2 + "px";
+  guiPanel2.style.fontSize = newWidth / 500 + "em";
+
+  // Background: full screen redraw
+  bg.graphics.clear();
+  bg.graphics
+    .beginFill("#000")
+    .drawRect(0, 0, stage.canvas.width, stage.canvas.height);
+  content.mask = bg;
+}
+//END ENVIRONMENT////////////////////////////////////////////////////////////////////
+// UTILITIES //////////////////////////////////////////////////
+function randRange(min, max) {
+  return Math.floor(Math.random() * (max - min)) + min;
+}
+function realTime() {
+  // createjs.Ticker.getTime() - TIME_START)/1000);
+}
+function millisToMinutesAndSeconds(millis) { 
+  millis = createjs.Ticker.getTime() - TIME_START;  var minutes = Math.floor(millis / 60000);
+  var seconds = ((millis % 60000) / 1000).toFixed(0);
+  return minutes + ":" + (seconds < 10 ? "0" : "") + seconds;
+}
+function distance(obj1, obj2) {
+  var difx = obj2.x - obj1.x;
+  var dify = obj2.y - obj1.y;
+
+  return Math.sqrt(difx * difx + dify * dify);
+}
+//END UTILITIES/////////////////////////////////////////////////////////
+//DOM///////////////////////////////////////////////////////////////////
+window.onload = function() {
+  ////document.iframe.focus();
+  document.getElementById("canvas").focus();
+  init();
+}; /*
+        FB.getLoginStatus(function(response) {
+            if (response.status === 'connected') {
+                // connected
+                testAPI();
+            } else if (response.status === 'not_authorized') {
+                // not_authorized
+                login();
+            } else {
+                // not_logged_in
+                login();
+            }
+        });
+    };
+    function login() {
+        FB.login(function(response) {
+            if (response.authResponse) {
+                // connected
+                testAPI();
+            } else {
+                // cancelled
+            }
+        });
+    }
+    function testAPI() {
+        FB.api('/me', function(response) {
+        });
+    }
+        // Load the SDK Asynchronously
+        //https://developers.facebook.com/docs/howtos/login/getting-started/
+        (function(d){
+            var js, id = 'facebook-jssdk', ref = d.getElementsByTagName('script')[0];
+            if (d.getElementById(id)) {return;}
+            js = d.createElement('script'); js.id = id; js.async = true;
+            js.src = "//connect.facebook.net/en_US/all.js";
+            ref.parentNode.insertBefore(js, ref);
+        }(document));
+*/
+
+/*
+    window.fbAsyncInit = function() {
+        FB.init({
+            appId : '{{ facebook_app_id }}',
+            status : true,
+            cookie : true,
+            xfbml : true,
+            oauth : true
+        });
+       /* FB.Event.subscribe('{% if current_user %}auth.logout{% else %}auth.login{% endif %}', function(response) {
+            {% if current_user %}
+                window.location = "/logout"
+                {% else %}
+                alert("auth.login event says: " + response.status);
+                //window.location.reload();
+                {% endif %}
+            }); */
